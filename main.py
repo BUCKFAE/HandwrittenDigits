@@ -2,15 +2,13 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 
-import sys
-
-LEARNING_RATE = 0.02
-TRAINING_SIZE = 0
+LEARNING_RATE = 0.03
+TRAINING_SIZE = 10
 NEURONS_HIDDEN = 128
-ITERATIONS = 10_000
+ITERATIONS = 50
 
 def to_one_hot(x):
-    return np.array([1 if i == x else 0 for i in range(10)]).reshape((10, 1))
+    return np.array([1. if i == x else 0. for i in range(10)]).reshape((10, 1))
 
 def get_data():
     """Returns MNIST Data, scaled betwen 0 and 1"""
@@ -54,7 +52,8 @@ loss_hist = []
 for iteration in range(ITERATIONS):
 
     loss = 0
-    gradient = 0
+    gradient_w1 = 0
+    gradient_w2 = 0
 
     correct = 0
 
@@ -73,19 +72,41 @@ for iteration in range(ITERATIONS):
 
         # Updating weights to all neurons
         for neuron in range(10):
-            gradient += (-1) * (td[neuron] - l3[neuron]) * bpropagate(W2[neuron], l2) * l2[neuron]
+            gradient_w2 += (-1) * (td[neuron] - l3[neuron]) * bpropagate(W2[neuron], l2) * l2[neuron]
 
-    # Updating gradient
-    gradient *= 1 / (2 * len(x_train))
-    W2 -= LEARNING_RATE * (1 / len(x_train)) * gradient
+        print(f"Shape W1: {W1.shape}")
+        print(f"Shape W2: {W2.shape}")
+        print(f"Shape L1: {l1.shape}")
+        print(f"Shape L2: {l2.shape}")
+
+        for curr in range(NEURONS_HIDDEN):
+            error = td[neuron] - l3[neuron]
+            mid = bpropagate(W2, l2) * np.transpose(W2[neuron])
+            prev = np.insert(bpropagate(W1, xd), 0, -1, axis= 0) * np.transpose(np.insert(xd, 0, -1, axis=0))
+
+            print(f"Shape Error: {error.shape}")
+            print(f"Shape Mid: {mid.shape}")
+            print(f"Shape prev: {prev.shape}")
+
+            gradient_w1 += (-1) * error * mid * prev
+
+    print(f"Shape W1: {W1.shape}")
+    print(f"Shape Gradient 1: {gradient_w1.shape}")
+
+    # Updating weights input -> hidden 1
+    gradient_w1 *= (1.0 / (2 * len(x_train)))
+    W1 -= LEARNING_RATE * (1 / len(x_train)) * gradient_w1
+
+    # Updating weights hidden 1 -> out
+    gradient_w2 *= (1.0 / (2 * len(x_train)))
+    W2 -= LEARNING_RATE * (1 / len(x_train)) * gradient_w2
 
     # Updating loss
-    loss /= (1 / len(x_train))
+    loss *= (1 / len(x_train))
     loss_hist.append(loss)
 
     # User Info
-    if iteration % 10 == 0: 
-        print(f"{iteration:5d} -> {loss:16f} ({correct:5d} / {len(x_train):5d} - {(correct / len(x_train) * 100):2f}%)")
+    print(f"{iteration:5d} -> {loss:16f} ({correct:5d} / {len(x_train):5d} - {(correct / len(x_train) * 100):2f}%)")
 
 # Plotting loss
 plt.plot([i for i in range(ITERATIONS)], loss_hist)
