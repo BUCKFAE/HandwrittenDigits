@@ -2,10 +2,11 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 
-LEARNING_RATE = 0.03
-TRAINING_SIZE = 10
-NEURONS_HIDDEN = 128
-ITERATIONS = 50
+LEARNING_RATE = 0.16
+TRAINING_SIZE = 1000
+ARCHITECTURE = [784, 16, 16, 10]
+ITERATIONS = 1000
+BATCH_SIZE = 128
 
 def to_one_hot(x):
     return np.array([1. if i == x else 0. for i in range(10)]).reshape((10, 1))
@@ -28,7 +29,7 @@ def get_data():
     return(x_train[:s], y_train[:s]), (x_test, y_test)
 
 def sig(x):
-    return 1 / (1 + np.exp(x))
+    return 1 / (1 + np.exp(-x))
 
 def sigg(x):
     return sig(x) * (1 - sig(x))
@@ -37,76 +38,90 @@ def sigg(x):
 (x_train, y_train), (x_test, y_test) = get_data()
 
 # Weight matricies
-W1 = np.random.random_sample(NEURONS_HIDDEN * (784 + 1)).reshape((NEURONS_HIDDEN, 784 + 1))
-W2 = np.random.random_sample(10 * (NEURONS_HIDDEN + 1)).reshape((10, NEURONS_HIDDEN + 1))
+weights = [np.random.random_sample(ARCHITECTURE[l] * (ARCHITECTURE[l - 1] + 1)).reshape((ARCHITECTURE[l], ARCHITECTURE[l - 1] + 1)) for l in range(1, len(ARCHITECTURE))]
+# print('\n'.join([f"{w.shape=}" for w in weights]))
 
 def propagate(W, x):
     return sig(W @ np.insert(x, 0, -1, axis=0))
 
 def bpropagate(W, x):
-    return sigg(W @ np.insert(x, 0, -1, axis= 0))
+    return sigg(W @ np.insert(x, 0, -1, axis=0))
 
 loss_hist = []
 
 # Training the model
 for iteration in range(ITERATIONS):
 
-    loss = 0
-    gradient_w1 = 0
-    gradient_w2 = 0
+    total_loss = 0
+    
+    # Storing gradients
+    gradients = [np.zeros_like(w) for w in weights]
 
     correct = 0
 
     for d in range(len(x_train)):
 
-        xd, td = x_train[d], y_train[d]
+        xd, td = np.array(x_train[d], dtype='float64'), y_train[d]
+
 
         # Calculating network output
-        l1 = xd
-        l2 = propagate(W1, l1)
-        l3 = propagate(W2, l2)
+        od = [xd]
+        
+        for w in weights:
+            res = propagate(w, od[-1])
+            od.append(res)
 
+        #if d == 1: print(f"{od[-1]=}")
         # Updating loss / accuracy
-        loss += sum([(l3[i][0] - td[i][0]) ** 2 for i in range(10)])
-        correct += 1 if np.argmax(l3) == np.argmax(td) else 0
+        loss = sum([(od[-1][i][0] - td[i][0]) ** 2 for i in range(ARCHITECTURE[-1])])
 
-        # Updating weights to all neurons
-        for neuron in range(10):
-            gradient_w2 += (-1) * (td[neuron] - l3[neuron]) * bpropagate(W2[neuron], l2) * l2[neuron]
+        # if d == 1: print(f"{od[-1]=}")
 
-        print(f"Shape W1: {W1.shape}")
-        print(f"Shape W2: {W2.shape}")
-        print(f"Shape L1: {l1.shape}")
-        print(f"Shape L2: {l2.shape}")
+        total_loss += loss
+        correct += 1 if np.argmax(od[-1]) == np.argmax(td) else 0
 
-        for curr in range(NEURONS_HIDDEN):
-            error = td[neuron] - l3[neuron]
-            mid = bpropagate(W2, l2) * np.transpose(W2[neuron])
-            prev = np.insert(bpropagate(W1, xd), 0, -1, axis= 0) * np.transpose(np.insert(xd, 0, -1, axis=0))
+        for l in range(len(weights) - 1, - 1, -1):
+         
+            if l == len(weights) - 1:
+                gradients[l] += -(loss) * bpropagate(weights[l], od[-2]) * weights[l]
 
-            print(f"Shape Error: {error.shape}")
-            print(f"Shape Mid: {mid.shape}")
-            print(f"Shape prev: {prev.shape}")
+            else:
+    
+                # TODO: Rethink this
+                p = gradients[l + 1]
+                p = np.delete(p, 0, axis=1)
+                p = np.prod(p, axis=0)
 
-            gradient_w1 += (-1) * error * mid * prev
+                prev = od[l]
+                #print(f"{prev.shape=}")
+                #print(f"{weights[l].shape=}")
+                k = bpropagate(weights[l], prev) * np.transpose(np.insert(od[l], 0, -1, axis=0))
 
-    print(f"Shape W1: {W1.shape}")
-    print(f"Shape Gradient 1: {gradient_w1.shape}")
+                #print(f"{p.shape=}")
+                #print(f"{k.shape=}")
+                #print(f"{gradients[l].shape=}")
 
-    # Updating weights input -> hidden 1
-    gradient_w1 *= (1.0 / (2 * len(x_train)))
-    W1 -= LEARNING_RATE * (1 / len(x_train)) * gradient_w1
+                # print(f"{np.max(p)=}")
 
-    # Updating weights hidden 1 -> out
-    gradient_w2 *= (1.0 / (2 * len(x_train)))
-    W2 -= LEARNING_RATE * (1 / len(x_train)) * gradient_w2
+
+                res = p @ k
+                #print(f"{res.shape=}")
+
+                # TODO Loss removed as exists in prev?
+                gradients[l] += res
+
+        if d == len(x_train) - 1 or d % BATCH_SIZE == 0:
+            for l in range(len(weights)):
+
+                weights[l] += LEARNING_RATE * (1 / len(x_train)) * gradients[l]
+            gradients = [np.zeros_like(w) for w in weights]
 
     # Updating loss
-    loss *= (1 / len(x_train))
-    loss_hist.append(loss)
+    total_loss *= (1.0 / len(x_train))
+    loss_hist.append(total_loss)
 
     # User Info
-    print(f"{iteration:5d} -> {loss:16f} ({correct:5d} / {len(x_train):5d} - {(correct / len(x_train) * 100):2f}%)")
+    print(f"{iteration:5d} -> {total_loss:.16f} ({correct:5d} / {len(x_train):5d} - {(correct / len(x_train) * 100):.2f}%)")
 
 # Plotting loss
 plt.plot([i for i in range(ITERATIONS)], loss_hist)
