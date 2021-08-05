@@ -30,14 +30,6 @@ def get_data():
     s = len(x_train) if TRAINING_SIZE == 0 else TRAINING_SIZE
     return(x_train[:s], y_train[:s]), (x_test, y_test)
 
-def get_xor_data():
-
-    # Data in the same format as MNIST Data to make swapping more easy
-    x_train = [[[0], [0]], [[0], [1]], [[1], [0]], [[1], [1]]]
-    y_train = [[[0]], [[1]], [[1]], [[0]]]
-
-    return (x_train, y_train), (None, None)
-
 def sig(x):
     """Sigmoid activation function"""
     return 1 / (1 + np.exp(-x))
